@@ -1,4 +1,32 @@
 """TTS microservice using Chatterbox Multilingual TTS."""
+# CRITICAL: Apply SDPA patch FIRST, before any other imports
+# This must happen before transformers models are imported
+try:
+    import torch
+    TORCH_AVAILABLE = True
+except ImportError:
+    TORCH_AVAILABLE = False
+    torch = None
+
+# Apply SDPA patch immediately if torch is available
+if TORCH_AVAILABLE:
+    try:
+        import transformers.utils
+        from packaging import version
+        
+        # Set _torch_version if it's not set (transformers sometimes doesn't detect it)
+        if getattr(transformers.utils, '_torch_version', 'N/A') == 'N/A':
+            transformers.utils._torch_version = torch.__version__.split('+')[0]
+        
+        # Patch the function to ensure it works
+        def _patched_sdpa_check():
+            # Check version directly from torch
+            torch_ver = torch.__version__.split('+')[0]
+            return version.parse(torch_ver) >= version.parse("2.1.1")
+        transformers.utils.is_torch_sdpa_available = _patched_sdpa_check
+    except Exception:
+        pass  # If patching fails, continue anyway
+
 import io
 import os
 import time
@@ -13,12 +41,6 @@ except ImportError:
     np = None
     sf = None
 
-try:
-    import torch
-    TORCH_AVAILABLE = True
-except ImportError:
-    TORCH_AVAILABLE = False
-    torch = None
 try:
     from chatterbox.mtl_tts import ChatterboxMultilingualTTS
     from transformers import BitsAndBytesConfig
@@ -47,6 +69,9 @@ structlog.configure(
 )
 
 logger = get_logger(__name__)
+
+# Note: SDPA patch is applied earlier (before importing chatterbox) to ensure it takes effect
+# before any transformers models are loaded
 
 # Environment configuration
 MODEL_ID = os.getenv("MODEL_ID", "chatterbox-multilingual")
