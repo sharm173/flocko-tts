@@ -1,0 +1,17 @@
+# Local testing requirements (without chatterbox-tts)
+# This allows testing the API structure without the full model
+fastapi==0.115.0
+uvicorn[standard]==0.30.5
+pydantic==2.9.0
+structlog==24.2.0
+python-multipart==0.0.9
+# torch and transformers are optional for local testing
+# Uncomment if you want to test with actual models
+# torch>=2.1.0
+# transformers>=4.46.0
+# accelerate>=1.0.1
+# bitsandbytes>=0.41.0
+# numpy>=1.24.0,<1.26.0
+# soundfile>=0.12.1
+# chatterbox-tts>=0.1.4
+

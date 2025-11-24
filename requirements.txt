@@ -1,0 +1,16 @@
+fastapi==0.115.0
+uvicorn[standard]==0.30.5
+pydantic==2.9.0
+structlog==24.2.0
+python-multipart==0.0.9
+torch>=2.1.0
+transformers>=4.46.0
+accelerate>=1.0.1
+bitsandbytes>=0.41.0
+# Note: chatterbox-tts requires numpy<1.26.0, but Python 3.12 only has numpy>=1.26.0 wheels
+# For local development on Python 3.12, this may not work. Use Docker for testing.
+# For Docker (linux/amd64), numpy 1.25.2 will build/install fine.
+numpy>=1.24.0,<1.26.0
+soundfile>=0.12.1
+chatterbox-tts>=0.1.4
+

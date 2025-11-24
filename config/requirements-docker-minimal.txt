@@ -1,0 +1,13 @@
+# Minimal requirements without chatterbox-tts (for testing)
+# Install chatterbox-tts separately after handling pkuseg
+fastapi==0.115.0
+uvicorn[standard]==0.30.5
+pydantic==2.9.0
+structlog==24.2.0
+python-multipart==0.0.9
+torch>=2.1.0
+transformers>=4.46.0
+accelerate>=1.0.1
+bitsandbytes>=0.41.0
+soundfile>=0.12.1
+
