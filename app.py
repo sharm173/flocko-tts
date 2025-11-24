@@ -189,12 +189,22 @@ async def synthesize(
             raise HTTPException(status_code=503, detail="numpy/soundfile not available - install full requirements for synthesis")
 
         # Generate audio using Chatterbox
-        _, audio_full = tts_model.synthesize(
+        # Note: model.generate() returns audio tensor directly (not tuple)
+        audio_tensor = tts_model.generate(
             text=text,
-            language=lang,
+            language_id=lang,  # Use language_id (string) not language
             temperature=0.7,
             exaggeration=0.5,
         )
+        
+        # Convert torch tensor to numpy if needed
+        if hasattr(audio_tensor, 'cpu'):
+            audio_full = audio_tensor.cpu().numpy()
+            # Remove batch dimension if present
+            if len(audio_full.shape) > 1:
+                audio_full = audio_full.squeeze()
+        else:
+            audio_full = np.array(audio_tensor)
 
         # Convert to int16 PCM
         audio_int16 = (audio_full * 32767).astype(np.int16)
@@ -250,12 +260,22 @@ async def stream_tts(request: TTSRequest) -> Response:
             raise HTTPException(status_code=503, detail="numpy not available - install full requirements for synthesis")
 
         # Generate full audio
-        _, audio_full = tts_model.synthesize(
+        # Note: model.generate() returns audio tensor directly (not tuple)
+        audio_tensor = tts_model.generate(
             text=request.text,
-            language=lang,
+            language_id=lang,  # Use language_id (string) not language
             temperature=0.7,
             exaggeration=0.5,
         )
+        
+        # Convert torch tensor to numpy if needed
+        if hasattr(audio_tensor, 'cpu'):
+            audio_full = audio_tensor.cpu().numpy()
+            # Remove batch dimension if present
+            if len(audio_full.shape) > 1:
+                audio_full = audio_full.squeeze()
+        else:
+            audio_full = np.array(audio_tensor)
 
         # Convert to int16 and chunk
         audio_int16 = (audio_full * 32767).astype(np.int16)
