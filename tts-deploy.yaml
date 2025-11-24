@@ -1,0 +1,90 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tts-service
+  namespace: voice-stack
+  labels:
+    app: tts-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tts-service
+  template:
+    metadata:
+      labels:
+        app: tts-service
+    spec:
+      containers:
+      - name: tts-service
+        image: 144631843160.dkr.ecr.ap-south-1.amazonaws.com/tts-service:latest
+        ports:
+        - name: http
+          containerPort: 8000
+        env:
+        - name: MODEL_ID
+          value: "chatterbox-multilingual"
+        - name: LANGUAGE
+          value: "hi"  # Hindi default
+        - name: USE_4BIT
+          value: "false"  # Disabled - chatterbox-tts doesn't support quantization_config
+        - name: TORCH_AUDIO_USE_SOUNDFILE
+          value: "1"
+        - name: HF_HOME
+          value: "/app/hf_cache"  # HuggingFace model cache
+        - name: MODEL_LOADING_ENABLED
+          value: "true"
+        resources:
+          limits:
+            nvidia.com/gpu: 1  # Requires 1 GPU
+            cpu: "2"
+            memory: "8Gi"
+          requests:
+            cpu: "1"
+            memory: "4Gi"
+            nvidia.com/gpu: 1
+        volumeMounts:
+        - name: model-cache
+          mountPath: /app/hf_cache
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8000
+          initialDelaySeconds: 60  # Model loading takes time
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8000
+          initialDelaySeconds: 90  # Give model time to load
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+        securityContext:
+          runAsUser: 1000  # appuser from Dockerfile
+          runAsNonRoot: true
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: false  # Model cache needs write access
+      volumes:
+      - name: model-cache
+        emptyDir: {}  # For now. Ideally use a PVC to avoid re-downloading models on restart
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tts-service
+  namespace: voice-stack
+  labels:
+    app: tts-service
+spec:
+  selector:
+    app: tts-service
+  ports:
+  - name: http
+    protocol: TCP
+    port: 80
+    targetPort: 8000
+  type: ClusterIP
+

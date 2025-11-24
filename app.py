@@ -77,20 +77,37 @@ def load_model() -> None:
         logger.warning("tts_no_gpu", message="No GPU detected. Loading on CPU will be slow.")
 
     try:
+        # chatterbox-tts requires ckpt_dir parameter
+        # Try to find default checkpoint directory or use HF_HOME
+        ckpt_dir = os.getenv("CHATTERBOX_CKPT_DIR", os.path.join(os.getenv("HF_HOME", "/app/hf_cache"), "chatterbox"))
+        
+        # Ensure directory exists
+        os.makedirs(ckpt_dir, exist_ok=True)
+        
+        # Note: chatterbox-tts may not support quantization_config parameter
+        # Try full precision loading
         if USE_4BIT and DEVICE == "cuda":
-            # 4-bit quantization for GPU optimization
-            bnb_config = BitsAndBytesConfig(
-                load_in_4bit=True,
-                bnb_4bit_quant_type="nf4",
-                bnb_4bit_compute_dtype=torch.bfloat16,
-            )
-            tts_model = ChatterboxMultilingualTTS.from_local(
-                device=DEVICE,
-                quantization_config=bnb_config,
-            )
+            logger.info("tts_attempting_quantization", message="Attempting 4-bit quantization")
+            try:
+                # Try with quantization if supported
+                bnb_config = BitsAndBytesConfig(
+                    load_in_4bit=True,
+                    bnb_4bit_quant_type="nf4",
+                    bnb_4bit_compute_dtype=torch.bfloat16,
+                )
+                tts_model = ChatterboxMultilingualTTS.from_local(
+                    ckpt_dir=ckpt_dir,
+                    device=DEVICE,
+                    quantization_config=bnb_config,
+                )
+                logger.info("tts_quantization_success", message="4-bit quantization enabled")
+            except (TypeError, ValueError) as e:
+                # Fallback to full precision if quantization not supported
+                logger.warning("tts_quantization_not_supported", error=str(e), message="Falling back to full precision")
+                tts_model = ChatterboxMultilingualTTS.from_local(ckpt_dir=ckpt_dir, device=DEVICE)
         else:
             # Full precision loading
-            tts_model = ChatterboxMultilingualTTS.from_local(device=DEVICE)
+            tts_model = ChatterboxMultilingualTTS.from_local(ckpt_dir=ckpt_dir, device=DEVICE)
 
         logger.info("tts_model_loaded", model=MODEL_ID, device=DEVICE)
     except Exception as e:
