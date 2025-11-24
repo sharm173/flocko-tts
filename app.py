@@ -77,15 +77,12 @@ def load_model() -> None:
         logger.warning("tts_no_gpu", message="No GPU detected. Loading on CPU will be slow.")
 
     try:
-        # chatterbox-tts requires ckpt_dir parameter
-        # Try to find default checkpoint directory or use HF_HOME
-        ckpt_dir = os.getenv("CHATTERBOX_CKPT_DIR", os.path.join(os.getenv("HF_HOME", "/app/hf_cache"), "chatterbox"))
-        
-        # Ensure directory exists
-        os.makedirs(ckpt_dir, exist_ok=True)
+        # Use from_pretrained to download model from HuggingFace automatically
+        # This will download to HF_HOME if set, otherwise default HuggingFace cache
+        logger.info("tts_downloading_model", message="Downloading model from HuggingFace (this may take a few minutes)")
         
         # Note: chatterbox-tts may not support quantization_config parameter
-        # Try full precision loading
+        # Try full precision loading first
         if USE_4BIT and DEVICE == "cuda":
             logger.info("tts_attempting_quantization", message="Attempting 4-bit quantization")
             try:
@@ -95,8 +92,8 @@ def load_model() -> None:
                     bnb_4bit_quant_type="nf4",
                     bnb_4bit_compute_dtype=torch.bfloat16,
                 )
-                tts_model = ChatterboxMultilingualTTS.from_local(
-                    ckpt_dir=ckpt_dir,
+                tts_model = ChatterboxMultilingualTTS.from_pretrained(
+                    MODEL_ID,
                     device=DEVICE,
                     quantization_config=bnb_config,
                 )
@@ -104,10 +101,10 @@ def load_model() -> None:
             except (TypeError, ValueError) as e:
                 # Fallback to full precision if quantization not supported
                 logger.warning("tts_quantization_not_supported", error=str(e), message="Falling back to full precision")
-                tts_model = ChatterboxMultilingualTTS.from_local(ckpt_dir=ckpt_dir, device=DEVICE)
+                tts_model = ChatterboxMultilingualTTS.from_pretrained(MODEL_ID, device=DEVICE)
         else:
-            # Full precision loading
-            tts_model = ChatterboxMultilingualTTS.from_local(ckpt_dir=ckpt_dir, device=DEVICE)
+            # Full precision loading - downloads model automatically
+            tts_model = ChatterboxMultilingualTTS.from_pretrained(MODEL_ID, device=DEVICE)
 
         logger.info("tts_model_loaded", model=MODEL_ID, device=DEVICE)
     except Exception as e:
