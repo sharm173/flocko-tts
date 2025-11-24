@@ -9,11 +9,19 @@ phases:
       - COMMIT_HASH=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)
       - IMAGE_TAG=${IMAGE_TAG:-${COMMIT_HASH}}
       - echo Build started on `date`
-      - echo Building the Docker image...
+      - echo Pulling previous image for cache...
+      - docker pull $REPOSITORY_URI:latest || echo "No previous image found, building from scratch"
   build:
     commands:
       - echo Building Docker image with tag $IMAGE_TAG...
-      - docker build --platform linux/amd64 -t $REPOSITORY_URI:$IMAGE_TAG -t $REPOSITORY_URI:latest .
+      - export DOCKER_BUILDKIT=1
+      - docker build 
+          --platform linux/amd64 
+          --cache-from $REPOSITORY_URI:latest 
+          --build-arg BUILDKIT_INLINE_CACHE=1
+          -t $REPOSITORY_URI:$IMAGE_TAG 
+          -t $REPOSITORY_URI:latest 
+          .
       - docker tag $REPOSITORY_URI:$IMAGE_TAG $REPOSITORY_URI:latest
   post_build:
     commands:
