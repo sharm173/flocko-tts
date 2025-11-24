@@ -57,7 +57,8 @@ WORKDIR /app
 
 # Copy installed packages
 COPY --from=builder /opt/conda /opt/conda
-COPY --from=builder /root/.local /home/appuser/.local
+# Create .local directory (packages are in /opt/conda, but some tools may expect .local)
+RUN mkdir -p /home/appuser/.local
 
 # Install runtime system deps (non-interactive)
 ENV DEBIAN_FRONTEND=noninteractive
