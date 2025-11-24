@@ -1,5 +1,5 @@
 # Multi-stage build for TTS service
-# Using Python 3.9 base image for pkuseg compatibility
+# Note: Python 3.10 base image - pkuseg may fail but chatterbox-tts should work for Hindi/English
 FROM pytorch/pytorch:2.1.0-cuda12.1-cudnn8-devel as builder
 
 WORKDIR /app
@@ -29,14 +29,20 @@ RUN if [ -f requirements-docker.txt ]; then \
         pip install --no-cache-dir -r /tmp/reqs_no_chatterbox.txt; \
     fi
 
-# Try to install pkuseg (optional - for Chinese, not needed for Hindi/English)
-# If it fails, that's OK - we'll install chatterbox without it
-RUN (pip install --no-cache-dir --no-build-isolation "pkuseg==0.0.25" && echo "✅ pkuseg installed") || \
+# Set environment to disable build isolation globally (so pkuseg can see numpy)
+ENV PIP_NO_BUILD_ISOLATION=1
+
+# Try to install pkuseg first (optional - for Chinese, not needed for Hindi/English)
+# With PIP_NO_BUILD_ISOLATION, it can see the already-installed numpy
+RUN (pip install --no-cache-dir "pkuseg==0.0.25" && echo "✅ pkuseg installed") || \
     echo "⚠️ pkuseg failed (will continue without Chinese segmentation support)"
 
 # Install chatterbox-tts
-# If pkuseg failed, chatterbox may still work for Hindi/English
-RUN pip install --no-cache-dir "chatterbox-tts>=0.1.4" && echo "✅ chatterbox-tts installed"
+# With PIP_NO_BUILD_ISOLATION, pkuseg can use already-installed numpy if it needs to rebuild
+# If pkuseg fails, pip should continue with other dependencies (pkuseg is optional)
+RUN pip install --no-cache-dir "chatterbox-tts>=0.1.4" && \
+    python -c "import chatterbox.mtl_tts; print('✅ chatterbox-tts verified')" && \
+    echo "✅ chatterbox-tts installation complete"
 
 # Production stage
 FROM pytorch/pytorch:2.1.0-cuda12.1-cudnn8-runtime
