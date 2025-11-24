@@ -77,34 +77,20 @@ def load_model() -> None:
         logger.warning("tts_no_gpu", message="No GPU detected. Loading on CPU will be slow.")
 
     try:
-        # Use from_pretrained to download model from HuggingFace automatically
+        # from_pretrained() only takes device parameter, downloads default model from HuggingFace
         # This will download to HF_HOME if set, otherwise default HuggingFace cache
         logger.info("tts_downloading_model", message="Downloading model from HuggingFace (this may take a few minutes)")
         
-        # Note: chatterbox-tts may not support quantization_config parameter
-        # Try full precision loading first
-        if USE_4BIT and DEVICE == "cuda":
-            logger.info("tts_attempting_quantization", message="Attempting 4-bit quantization")
-            try:
-                # Try with quantization if supported
-                bnb_config = BitsAndBytesConfig(
-                    load_in_4bit=True,
-                    bnb_4bit_quant_type="nf4",
-                    bnb_4bit_compute_dtype=torch.bfloat16,
-                )
-                tts_model = ChatterboxMultilingualTTS.from_pretrained(
-                    MODEL_ID,
-                    device=DEVICE,
-                    quantization_config=bnb_config,
-                )
-                logger.info("tts_quantization_success", message="4-bit quantization enabled")
-            except (TypeError, ValueError) as e:
-                # Fallback to full precision if quantization not supported
-                logger.warning("tts_quantization_not_supported", error=str(e), message="Falling back to full precision")
-                tts_model = ChatterboxMultilingualTTS.from_pretrained(MODEL_ID, device=DEVICE)
+        # Convert device string to torch.device if needed
+        if isinstance(DEVICE, str):
+            device_obj = torch.device(DEVICE)
         else:
-            # Full precision loading - downloads model automatically
-            tts_model = ChatterboxMultilingualTTS.from_pretrained(MODEL_ID, device=DEVICE)
+            device_obj = DEVICE
+        
+        # Note: chatterbox-tts from_pretrained() only accepts device parameter
+        # It downloads the default model automatically from HuggingFace
+        # Full precision loading (quantization not supported by from_pretrained)
+        tts_model = ChatterboxMultilingualTTS.from_pretrained(device_obj)
 
         logger.info("tts_model_loaded", model=MODEL_ID, device=DEVICE)
     except Exception as e:
