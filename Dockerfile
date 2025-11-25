@@ -37,7 +37,7 @@ RUN pip install --no-cache-dir --no-deps "chatterbox-tts>=0.1.4" && \
         "s3tokenizer" \
         "torch==2.6.0" \
         "torchaudio==2.6.0" \
-        "transformers==4.46.3" \
+        "transformers>=4.47.0" \
         "diffusers==0.29.0" \
         "resemble-perth==1.0.1" \
         "conformer==0.3.2" \
@@ -67,6 +67,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     rm -rf /var/lib/apt/lists/*
 
 # Copy application
+# Note: Docker uses file checksums for COPY cache, so any change to app.py will invalidate this layer
 COPY --chown=appuser:appuser app.py /app/
 
 ENV PATH=/home/appuser/.local/bin:/opt/conda/bin:$PATH

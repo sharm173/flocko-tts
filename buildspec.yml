@@ -9,20 +9,29 @@ phases:
       - COMMIT_HASH=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)
       - IMAGE_TAG=${IMAGE_TAG:-${COMMIT_HASH}}
       - echo Build started on `date`
-      - echo Pulling previous image for cache...
-      - docker pull $REPOSITORY_URI:latest || echo "No previous image found, building from scratch"
+      - echo "Pulling previous image and base images for cache..."
+      - docker pull $REPOSITORY_URI:latest 2>&1 | head -5 || echo "No previous image found"
+      - echo "Pulling base images for cache..."
+      - docker pull pytorch/pytorch:2.1.0-cuda12.1-cudnn8-devel || echo "Base image pull failed (will download during build)"
+      - docker pull pytorch/pytorch:2.1.0-cuda12.1-cudnn8-runtime || echo "Runtime base image pull failed (will download during build)"
   build:
     commands:
       - echo Building Docker image with tag $IMAGE_TAG...
       - export DOCKER_BUILDKIT=1
+      - export BUILDKIT_PROGRESS=plain
+      - echo "Starting build with cache optimization..."
       - docker build 
           --platform linux/amd64 
           --cache-from $REPOSITORY_URI:latest 
+          --cache-from pytorch/pytorch:2.1.0-cuda12.1-cudnn8-devel
+          --cache-from pytorch/pytorch:2.1.0-cuda12.1-cudnn8-runtime
           --build-arg BUILDKIT_INLINE_CACHE=1
           -t $REPOSITORY_URI:$IMAGE_TAG 
           -t $REPOSITORY_URI:latest 
-          .
+          . 2>&1 | tee /tmp/build.log | grep -E "(CACHED|Step|Using cache|Pulling|Building)" | tail -50
       - docker tag $REPOSITORY_URI:$IMAGE_TAG $REPOSITORY_URI:latest
+      - echo "Build summary:"
+      - grep -c "CACHED" /tmp/build.log 2>/dev/null && echo "✅ Used cached layers" || echo "⚠️ No cache hits found"
   post_build:
     commands:
       - echo Build completed on `date`

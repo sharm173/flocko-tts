@@ -15,6 +15,10 @@ provider "aws" {
   region = "ap-south-1"
 }
 
+variable "region" {
+  default = "ap-south-1"
+}
+
 # ECR Repository
 resource "aws_ecr_repository" "tts_service" {
   name                 = "tts-service"
@@ -168,10 +172,11 @@ resource "aws_codebuild_project" "tts_service" {
     }
   }
 
-  # Cache Docker layers
+  # Cache Docker layers - use S3 for persistent cache across instances
   cache {
-    type = "LOCAL"
-    modes = ["LOCAL_DOCKER_LAYER_CACHE"]
+    type     = "S3"
+    location = "codebuild-cache-${data.aws_caller_identity.current.account_id}-${var.region}"
+    modes    = ["LOCAL_DOCKER_LAYER_CACHE", "LOCAL_SOURCE_CACHE"]
   }
 }
 
