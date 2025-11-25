@@ -51,7 +51,7 @@ except ImportError:
     BitsAndBytesConfig = None
 
 from fastapi import FastAPI, Form, HTTPException
-from fastapi.responses import Response
+from fastapi.responses import Response, StreamingResponse
 from pydantic import BaseModel
 from structlog import get_logger
 
@@ -237,7 +237,7 @@ async def synthesize(
 
 
 @app.post("/v1/tts/stream")
-async def stream_tts(request: TTSRequest) -> Response:
+async def stream_tts(request: TTSRequest) -> StreamingResponse:
     """
     Stream TTS audio (chunked response).
 
@@ -290,7 +290,7 @@ async def stream_tts(request: TTSRequest) -> Response:
         latency_ms = (time.time() - start_time) * 1000
         logger.info("tts_stream_success", latency_ms=latency_ms)
 
-        return Response(
+        return StreamingResponse(
             content=generate_chunks(),
             media_type="application/octet-stream",
             headers={
