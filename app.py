@@ -190,11 +190,13 @@ async def synthesize(
 
         # Generate audio using Chatterbox
         # Note: model.generate() returns audio tensor directly (not tuple)
+        # Disable output_attentions to avoid SDPA compatibility issues
         audio_tensor = tts_model.generate(
             text=text,
             language_id=lang,  # Use language_id (string) not language
             temperature=0.7,
             exaggeration=0.5,
+            output_attentions=False,  # Disable attentions for SDPA compatibility
         )
         
         # Convert torch tensor to numpy if needed
@@ -261,11 +263,13 @@ async def stream_tts(request: TTSRequest) -> StreamingResponse:
 
         # Generate full audio
         # Note: model.generate() returns audio tensor directly (not tuple)
+        # Disable output_attentions to avoid SDPA compatibility issues
         audio_tensor = tts_model.generate(
             text=request.text,
             language_id=lang,  # Use language_id (string) not language
             temperature=0.7,
             exaggeration=0.5,
+            output_attentions=False,  # Disable attentions for SDPA compatibility
         )
         
         # Convert torch tensor to numpy if needed
