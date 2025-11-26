@@ -1,6 +1,13 @@
 """TTS microservice using Chatterbox Multilingual TTS."""
-# CRITICAL: Apply SDPA patch FIRST, before any other imports
+# CRITICAL: Set attention implementation BEFORE any transformers imports
 # This must happen before transformers models are imported
+
+import os
+
+# SOLUTION 1: Set the correct environment variable (MUST be before transformers import)
+# This is the recommended approach - forces all transformers models to use eager attention
+os.environ["TRANSFORMERS_ATTN_IMPLEMENTATION"] = "eager"
+
 try:
     import torch
     TORCH_AVAILABLE = True
@@ -8,28 +15,40 @@ except ImportError:
     TORCH_AVAILABLE = False
     torch = None
 
-# Apply SDPA patch immediately if torch is available
-# CRITICAL: Disable SDPA to force eager attention and avoid output_attentions issues
-if TORCH_AVAILABLE:
-    try:
-        import transformers.utils
-        from packaging import version
-        
-        # Set _torch_version if it's not set (transformers sometimes doesn't detect it)
-        if getattr(transformers.utils, '_torch_version', 'N/A') == 'N/A':
-            transformers.utils._torch_version = torch.__version__.split('+')[0]
-        
-        # CRITICAL FIX: Force SDPA to be unavailable so transformers uses eager attention
-        # This prevents the "output_attentions not supported with SDPA" error
-        def _patched_sdpa_check():
-            # Return False to disable SDPA, forcing eager attention
-            return False
-        transformers.utils.is_torch_sdpa_available = _patched_sdpa_check
-    except Exception:
-        pass  # If patching fails, continue anyway
+# SOLUTION 2: Monkey-patch the loader as fallback (in case env var doesn't work)
+# This intercepts AutoModel.from_pretrained calls and injects attn_implementation="eager"
+try:
+    import transformers
+    from transformers import AutoModel, AutoModelForCausalLM
+    
+    # Store original methods
+    original_from_pretrained_auto = AutoModel.from_pretrained
+    original_from_pretrained_causal = AutoModelForCausalLM.from_pretrained
+    
+    # Define wrapper that injects attn_implementation="eager"
+    @classmethod
+    def patched_from_pretrained_auto(cls, pretrained_model_name_or_path, *model_args, **kwargs):
+        # Force eager attention
+        kwargs["attn_implementation"] = "eager"
+        print(f"🔧 Monkey-patch injecting attn_implementation='eager' for {pretrained_model_name_or_path}", flush=True)
+        return original_from_pretrained_auto(pretrained_model_name_or_path, *model_args, **kwargs)
+    
+    @classmethod
+    def patched_from_pretrained_causal(cls, pretrained_model_name_or_path, *model_args, **kwargs):
+        # Force eager attention
+        kwargs["attn_implementation"] = "eager"
+        return original_from_pretrained_causal(pretrained_model_name_or_path, *model_args, **kwargs)
+    
+    # Apply the patch
+    AutoModel.from_pretrained = patched_from_pretrained_auto
+    AutoModelForCausalLM.from_pretrained = patched_from_pretrained_causal
+    print("✅ Patched transformers.AutoModel.from_pretrained to force eager attention", flush=True)
+except Exception as e:
+    # If patching fails, continue anyway - env var should handle it
+    print(f"⚠️ Monkey-patch failed: {e}", flush=True)
+    pass
 
 import io
-import os
 import time
 from typing import Optional
 
@@ -43,6 +62,7 @@ except ImportError:
     sf = None
 
 try:
+    # Now import chatterbox - the env var and monkey-patch should ensure eager attention
     from chatterbox.mtl_tts import ChatterboxMultilingualTTS
     from transformers import BitsAndBytesConfig
     CHATTERBOX_AVAILABLE = True
