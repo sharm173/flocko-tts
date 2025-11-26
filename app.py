@@ -17,35 +17,49 @@ except ImportError:
 
 # SOLUTION 2: Monkey-patch the loader as fallback (in case env var doesn't work)
 # This intercepts AutoModel.from_pretrained calls and injects attn_implementation="eager"
+# We need to patch ALL model classes that transformers might use
 try:
     import transformers
-    from transformers import AutoModel, AutoModelForCausalLM
+    from transformers import (
+        AutoModel, 
+        AutoModelForCausalLM,
+        AutoModelForSeq2SeqLM,
+        AutoModelForSpeechSeq2Seq,
+        PreTrainedModel
+    )
+    # AutoModelForTextToSpeech might not exist in all transformers versions
+    try:
+        from transformers import AutoModelForTextToSpeech
+    except ImportError:
+        AutoModelForTextToSpeech = None
     
-    # Store original methods
-    original_from_pretrained_auto = AutoModel.from_pretrained
-    original_from_pretrained_causal = AutoModelForCausalLM.from_pretrained
+    # Store original method
+    original_from_pretrained = PreTrainedModel.from_pretrained
     
     # Define wrapper that injects attn_implementation="eager"
     @classmethod
-    def patched_from_pretrained_auto(cls, pretrained_model_name_or_path, *model_args, **kwargs):
+    def patched_from_pretrained(cls, pretrained_model_name_or_path, *model_args, **kwargs):
         # Force eager attention
         kwargs["attn_implementation"] = "eager"
         print(f"🔧 Monkey-patch injecting attn_implementation='eager' for {pretrained_model_name_or_path}", flush=True)
-        return original_from_pretrained_auto(pretrained_model_name_or_path, *model_args, **kwargs)
+        return original_from_pretrained(pretrained_model_name_or_path, *model_args, **kwargs)
     
-    @classmethod
-    def patched_from_pretrained_causal(cls, pretrained_model_name_or_path, *model_args, **kwargs):
-        # Force eager attention
-        kwargs["attn_implementation"] = "eager"
-        return original_from_pretrained_causal(pretrained_model_name_or_path, *model_args, **kwargs)
+    # Apply the patch to the base class - this should catch all subclasses
+    PreTrainedModel.from_pretrained = patched_from_pretrained
+    # Also patch specific classes to be safe
+    AutoModel.from_pretrained = patched_from_pretrained
+    AutoModelForCausalLM.from_pretrained = patched_from_pretrained
+    AutoModelForSeq2SeqLM.from_pretrained = patched_from_pretrained
+    AutoModelForSpeechSeq2Seq.from_pretrained = patched_from_pretrained
+    if hasattr(transformers, 'AutoModelForTextToSpeech'):
+        AutoModelForTextToSpeech.from_pretrained = patched_from_pretrained
     
-    # Apply the patch
-    AutoModel.from_pretrained = patched_from_pretrained_auto
-    AutoModelForCausalLM.from_pretrained = patched_from_pretrained_causal
-    print("✅ Patched transformers.AutoModel.from_pretrained to force eager attention", flush=True)
+    print("✅ Patched transformers model loaders to force eager attention", flush=True)
 except Exception as e:
     # If patching fails, continue anyway - env var should handle it
     print(f"⚠️ Monkey-patch failed: {e}", flush=True)
+    import traceback
+    traceback.print_exc()
     pass
 
 import io
