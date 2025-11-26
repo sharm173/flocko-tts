@@ -9,7 +9,7 @@ import os
 os.environ["TRANSFORMERS_ATTN_IMPLEMENTATION"] = "eager"
 
 try:
-import torch
+    import torch
     TORCH_AVAILABLE = True
 except ImportError:
     TORCH_AVAILABLE = False
