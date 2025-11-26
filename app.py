@@ -119,17 +119,42 @@ def load_model() -> None:
         
         # Configure model to use 'eager' attention instead of 'sdpa' to avoid output_attentions issues
         # This must be done after model loading
-        if hasattr(tts_model, 'model') and hasattr(tts_model.model, 'config'):
-            try:
-                # Set attention implementation to eager for all transformer layers
+        try:
+            # Try multiple approaches to set attention implementation to eager
+            # Approach 1: Set on main model config
+            if hasattr(tts_model, 'model') and hasattr(tts_model.model, 'config'):
                 if hasattr(tts_model.model.config, 'attn_implementation'):
                     tts_model.model.config.attn_implementation = 'eager'
-                # Also try setting it on the model itself if it has transformer layers
-                if hasattr(tts_model.model, 'encoder') and hasattr(tts_model.model.encoder, 'config'):
-                    tts_model.model.encoder.config.attn_implementation = 'eager'
-                logger.info("tts_attention_config", message="Set attention implementation to 'eager'")
-            except Exception as e:
-                logger.warning("tts_attention_config_failed", error=str(e), message="Could not set attention implementation, may use default")
+                    logger.info("tts_attention_config", location="model.config", message="Set attn_implementation to 'eager'")
+            
+            # Approach 2: Set on encoder config if it exists
+            if hasattr(tts_model, 'model') and hasattr(tts_model.model, 'encoder'):
+                if hasattr(tts_model.model.encoder, 'config'):
+                    if hasattr(tts_model.model.encoder.config, 'attn_implementation'):
+                        tts_model.model.encoder.config.attn_implementation = 'eager'
+                        logger.info("tts_attention_config", location="encoder.config", message="Set attn_implementation to 'eager'")
+                # Also try setting on encoder layers directly
+                if hasattr(tts_model.model.encoder, 'layers'):
+                    for i, layer in enumerate(tts_model.model.encoder.layers):
+                        if hasattr(layer, 'config') and hasattr(layer.config, 'attn_implementation'):
+                            layer.config.attn_implementation = 'eager'
+                    logger.info("tts_attention_config", location="encoder.layers", message=f"Set attn_implementation to 'eager' on {len(tts_model.model.encoder.layers)} layers")
+            
+            # Approach 3: Set on decoder if it exists
+            if hasattr(tts_model, 'model') and hasattr(tts_model.model, 'decoder'):
+                if hasattr(tts_model.model.decoder, 'config'):
+                    if hasattr(tts_model.model.decoder.config, 'attn_implementation'):
+                        tts_model.model.decoder.config.attn_implementation = 'eager'
+                        logger.info("tts_attention_config", location="decoder.config", message="Set attn_implementation to 'eager'")
+            
+            # Approach 4: Set via model's _attn_implementation attribute if it exists
+            if hasattr(tts_model, 'model') and hasattr(tts_model.model, '_attn_implementation'):
+                tts_model.model._attn_implementation = 'eager'
+                logger.info("tts_attention_config", location="model._attn_implementation", message="Set _attn_implementation to 'eager'")
+            
+            logger.info("tts_attention_config_complete", message="Attempted to set attention implementation to 'eager'")
+        except Exception as e:
+            logger.warning("tts_attention_config_failed", error=str(e), message="Could not set attention implementation, may use default")
 
         logger.info("tts_model_loaded", model=MODEL_ID, device=DEVICE)
     except Exception as e:
