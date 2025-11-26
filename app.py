@@ -116,6 +116,20 @@ def load_model() -> None:
         # It downloads the default model automatically from HuggingFace
         # Full precision loading (quantization not supported by from_pretrained)
         tts_model = ChatterboxMultilingualTTS.from_pretrained(device_obj)
+        
+        # Configure model to use 'eager' attention instead of 'sdpa' to avoid output_attentions issues
+        # This must be done after model loading
+        if hasattr(tts_model, 'model') and hasattr(tts_model.model, 'config'):
+            try:
+                # Set attention implementation to eager for all transformer layers
+                if hasattr(tts_model.model.config, 'attn_implementation'):
+                    tts_model.model.config.attn_implementation = 'eager'
+                # Also try setting it on the model itself if it has transformer layers
+                if hasattr(tts_model.model, 'encoder') and hasattr(tts_model.model.encoder, 'config'):
+                    tts_model.model.encoder.config.attn_implementation = 'eager'
+                logger.info("tts_attention_config", message="Set attention implementation to 'eager'")
+            except Exception as e:
+                logger.warning("tts_attention_config_failed", error=str(e), message="Could not set attention implementation, may use default")
 
         logger.info("tts_model_loaded", model=MODEL_ID, device=DEVICE)
     except Exception as e:
@@ -190,13 +204,11 @@ async def synthesize(
 
         # Generate audio using Chatterbox
         # Note: model.generate() returns audio tensor directly (not tuple)
-        # Disable output_attentions to avoid SDPA compatibility issues
         audio_tensor = tts_model.generate(
             text=text,
             language_id=lang,  # Use language_id (string) not language
             temperature=0.7,
             exaggeration=0.5,
-            output_attentions=False,  # Disable attentions for SDPA compatibility
         )
         
         # Convert torch tensor to numpy if needed
@@ -263,13 +275,11 @@ async def stream_tts(request: TTSRequest) -> StreamingResponse:
 
         # Generate full audio
         # Note: model.generate() returns audio tensor directly (not tuple)
-        # Disable output_attentions to avoid SDPA compatibility issues
         audio_tensor = tts_model.generate(
             text=request.text,
             language_id=lang,  # Use language_id (string) not language
             temperature=0.7,
             exaggeration=0.5,
-            output_attentions=False,  # Disable attentions for SDPA compatibility
         )
         
         # Convert torch tensor to numpy if needed
