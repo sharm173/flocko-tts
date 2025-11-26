@@ -34,6 +34,8 @@ spec:
           value: "/app/hf_cache"  # HuggingFace model cache
         - name: MODEL_LOADING_ENABLED
           value: "true"
+        - name: TRANSFORMERS_ATTN_IMPLEMENTATION
+          value: "eager"  # Force eager attention to avoid SDPA compatibility issues
         resources:
           limits:
             nvidia.com/gpu: 1  # Requires 1 GPU
