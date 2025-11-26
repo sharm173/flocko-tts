@@ -9,6 +9,7 @@ except ImportError:
     torch = None
 
 # Apply SDPA patch immediately if torch is available
+# CRITICAL: Disable SDPA to force eager attention and avoid output_attentions issues
 if TORCH_AVAILABLE:
     try:
         import transformers.utils
@@ -18,11 +19,11 @@ if TORCH_AVAILABLE:
         if getattr(transformers.utils, '_torch_version', 'N/A') == 'N/A':
             transformers.utils._torch_version = torch.__version__.split('+')[0]
         
-        # Patch the function to ensure it works
+        # CRITICAL FIX: Force SDPA to be unavailable so transformers uses eager attention
+        # This prevents the "output_attentions not supported with SDPA" error
         def _patched_sdpa_check():
-            # Check version directly from torch
-            torch_ver = torch.__version__.split('+')[0]
-            return version.parse(torch_ver) >= version.parse("2.1.1")
+            # Return False to disable SDPA, forcing eager attention
+            return False
         transformers.utils.is_torch_sdpa_available = _patched_sdpa_check
     except Exception:
         pass  # If patching fails, continue anyway
