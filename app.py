@@ -9,7 +9,7 @@ import os
 os.environ["TRANSFORMERS_ATTN_IMPLEMENTATION"] = "eager"
 
 try:
-    import torch
+import torch
     TORCH_AVAILABLE = True
 except ImportError:
     TORCH_AVAILABLE = False
@@ -51,8 +51,28 @@ try:
     AutoModelForCausalLM.from_pretrained = patched_from_pretrained
     AutoModelForSeq2SeqLM.from_pretrained = patched_from_pretrained
     AutoModelForSpeechSeq2Seq.from_pretrained = patched_from_pretrained
-    if hasattr(transformers, 'AutoModelForTextToSpeech'):
+    if AutoModelForTextToSpeech:
         AutoModelForTextToSpeech.from_pretrained = patched_from_pretrained
+    
+    # Also patch AutoConfig to force eager attention in config
+    try:
+        from transformers import AutoConfig
+        original_config_from_pretrained = AutoConfig.from_pretrained
+        
+        @classmethod
+        def patched_config_from_pretrained(cls, pretrained_model_name_or_path, *args, **kwargs):
+            config = original_config_from_pretrained(pretrained_model_name_or_path, *args, **kwargs)
+            # Force eager attention in config
+            if hasattr(config, 'attn_implementation'):
+                config.attn_implementation = 'eager'
+            # Also set it as an attribute that might be checked
+            setattr(config, '_attn_implementation', 'eager')
+            return config
+        
+        AutoConfig.from_pretrained = patched_config_from_pretrained
+        print("✅ Also patched AutoConfig.from_pretrained", flush=True)
+    except Exception as config_error:
+        print(f"⚠️ AutoConfig patch failed (non-critical): {config_error}", flush=True)
     
     print("✅ Patched transformers model loaders to force eager attention", flush=True)
 except Exception as e:
@@ -124,7 +144,7 @@ MODEL_LOADING_ENABLED = os.getenv("MODEL_LOADING_ENABLED", "true").lower() == "t
 def load_model() -> None:
     """Load Chatterbox TTS model."""
     global tts_model
-
+    
     if not CHATTERBOX_AVAILABLE:
         logger.warning("tts_chatterbox_not_available", message="chatterbox-tts not installed - running in stub mode")
         return
@@ -303,7 +323,7 @@ async def synthesize(
                 "X-Latency-MS": str(latency_ms),
             },
         )
-
+            
     except Exception as e:
         latency_ms = (time.time() - start_time) * 1000
         logger.error("tts_synthesize_error", error=str(e), latency_ms=latency_ms)
@@ -363,8 +383,8 @@ async def stream_tts(request: TTSRequest) -> StreamingResponse:
 
         latency_ms = (time.time() - start_time) * 1000
         logger.info("tts_stream_success", latency_ms=latency_ms)
-
-        return StreamingResponse(
+        
+    return StreamingResponse(
             content=generate_chunks(),
             media_type="application/octet-stream",
             headers={
